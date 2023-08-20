@@ -8,7 +8,7 @@
 #include <vector>
 
 #define RESERVED_SPACE (1024)
-#define OUTPUT_FILE_NAME ("rtn-output.csv")
+#define OUTPUT_FILE_NAME ("count.csv")
 
 using std::cerr;
 using std::endl;
@@ -49,13 +49,15 @@ VOID trace(TRACE trace, VOID* v)
         return;
     }
     ADDRINT rtn_addr = RTN_Address(rtn);
-
+	IMG img = IMG_FindByAddress(rtn_addr); 
+	if (img == IMG_Invalid()) {
+		return;
+	}
+	if (!IMG_IsMainExecutable(img))
+		return;
+	
     auto it = rtn_map.find(rtn_addr);
     if (it == rtn_map.end()) {
-        IMG img = IMG_FindByAddress(rtn_addr);
-        if (img == IMG_Invalid()) {
-            return;
-        }
         rtn_stat = new rtn_stat_t({ IMG_Name(img), IMG_LowAddress(img), RTN_Name(rtn), RTN_Address(rtn), 0, 0 });
         rtn_map[rtn_addr] = rtn_stat;
         rtn_list.push_back(rtn_stat);
@@ -80,25 +82,25 @@ VOID fini(INT32 code, VOID* v)
     }
     fclose(file_ptr);
 }
-
+/*
 INT32 Usage()
 {
     cerr << "This pintool counts the number of times a routine is executed" << endl;
     cerr << "and the number of instructions executed in a routine and save the statistics to " << OUTPUT_FILE_NAME << endl;
     return -1;
 }
-
+*/
 int collect_profile()
 {
-    PIN_InitSymbols();
+    //PIN_InitSymbols();
     rtn_map.reserve(RESERVED_SPACE);
     rtn_list.reserve(RESERVED_SPACE);
     file_ptr = fopen(OUTPUT_FILE_NAME, "w");
-
+/*
     if (PIN_Init(argc, argv)) {
         return Usage();
     }
-
+*/
     TRACE_AddInstrumentFunction(trace, 0);
     PIN_AddFiniFunction(fini, 0);
     PIN_StartProgram();
