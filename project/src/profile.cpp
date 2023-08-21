@@ -41,6 +41,29 @@ VOID ins_count(UINT64* counter, UINT32 c)
     *counter += c;
 }
 
+bool should_inline_routine(RTN rtn)
+{
+    // Count the number of call sites in the routine
+    int numCallSites = 0;
+    for (INS ins = RTN_InsHead(rtn); INS_Valid(ins); ins = INS_Next(ins)) {
+        if (INS_IsCall(ins)) {
+            numCallSites++;
+        }
+    }
+
+    // If the routine has exactly one call site and that call site is hot, inline it
+    if (numCallSites == 1) {
+        // Determine if the call site is hot based on your profiling data
+        // For example, check if the call site's address is in your hot call site list
+        if (is_hot_call_site(RTN_Address(rtn))) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+
 // A function to inline another function at the given trace
 VOID InlineFunction(TRACE trace, RTN targetRtn)
 {
