@@ -53,12 +53,8 @@ bool should_inline_routine(RTN rtn)
 
     // If the routine has exactly one call site and that call site is hot, inline it
     if (numCallSites == 1) {
-        // Determine if the call site is hot based on your profiling data
-        // For example, check if the call site's address is in your hot call site list
-        if (is_hot_call_site(RTN_Address(rtn))) {
-            return true;
+		return true;
         }
-    }
 
     return false;
 }
@@ -115,6 +111,7 @@ VOID Routine(RTN rtn, VOID *v)
     RTN_Close(rtn);
 }
 */
+
 VOID trace(TRACE trace, VOID* v)
 {
     rtn_stat_t* rtn_stat;
