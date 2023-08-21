@@ -89,6 +89,21 @@ VOID InlineFunction(TRACE trace, RTN targetRtn)
     }
 }
 
+// Function to reorder instructions within a basic block
+VOID ReorderInstructions(BBL bbl)
+{
+    // Create a temporary vector to hold the instructions in the original order
+    vector<INS> insVector;
+    for (INS ins = BBL_InsHead(bbl); INS_Valid(ins); ins = INS_Next(ins)) {
+        insVector.push_back(ins);
+    }
+
+    // Clear the basic block and insert instructions in the new order
+    BBL_Clear(bbl);
+    for (const INS& ins : insVector) {
+        BBL_InsertInsn(bbl, IPOINT_AFTER, ins);
+    }
+}
 
 /*
 VOID RtnCall(UINT64* counter)
@@ -144,6 +159,11 @@ VOID trace(TRACE trace, VOID* v)
     if (should_inline_routine(rtn)) {
         // Perform function inlining for the current trace
         InlineFunction(trace, rtn);
+		
+		// Perform code reordering for basic blocks with inlined functions
+        for (BBL bbl = TRACE_BblHead(trace); BBL_Valid(bbl); bbl = BBL_Next(bbl)) {
+            ReorderInstructions(bbl);
+        }
     } else {
         // Count instructions in the regular way
         for (BBL bbl = TRACE_BblHead(trace); BBL_Valid(bbl); bbl = BBL_Next(bbl)) {
