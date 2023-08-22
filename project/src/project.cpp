@@ -45,7 +45,7 @@ set<string> tc_rtn_names;
 KNOB<BOOL> prof_knob(KNOB_MODE_WRITEONCE, "pintool", "prof", "0", "run exercise 2 and print out loop trip count information into the file loop-count.csv");
 KNOB<BOOL> inst_knob(KNOB_MODE_WRITEONCE, "pintool", "inst", "0", "run in probe mode and generate the binary code of the top 10 routines");
 
-int main_collect_profile();
+int collect_profile();
 
 int rtn_translation_inst();
 
