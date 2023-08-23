@@ -45,7 +45,7 @@ set<string> tc_rtn_names;
 KNOB<BOOL> prof_knob(KNOB_MODE_WRITEONCE, "pintool", "prof", "0", "run profile and print out routines information into the file count.csv");
 KNOB<BOOL> opt_knob(KNOB_MODE_WRITEONCE, "pintool", "opt", "0", "run in probe mode");
 
-int main_collect_profile();
+int collect_profile();
 
 int rtn_translation_inst();
 
