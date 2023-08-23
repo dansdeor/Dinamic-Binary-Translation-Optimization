@@ -23,13 +23,13 @@ using namespace std;
 #define RTN_INS_COUNT 7
 #define PROFILING_FILE_NAME "loop-count.csv"
 
-typedef struct rtn_stat {
+typedef struct rtnStat {
     string rtn_name;
     uint64_t count;
     bool in_executable;
-} rtn_stat_t;
+} rtnStat_t;
 
-bool rtn_stat_comp(rtn_stat_t* a, rtn_stat_t* b)
+bool rtnStat_comp(rtnStat_t* a, rtnStat_t* b)
 {
     if (a->in_executable != b->in_executable) {
         return a->in_executable;
@@ -37,13 +37,13 @@ bool rtn_stat_comp(rtn_stat_t* a, rtn_stat_t* b)
     return a->count >= b->count;
 }
 
-map<string, rtn_stat_t*> rtn_map;
-vector<rtn_stat_t*> rtn_vec;
+map<string, rtnStat_t*> rtnMap;
+vector<rtnStat_t*> rtn_vec;
 
 set<string> tc_rtn_names;
 
-KNOB<BOOL> prof_knob(KNOB_MODE_WRITEONCE, "pintool", "prof", "0", "run exercise 2 and print out loop trip count information into the file loop-count.csv");
-KNOB<BOOL> inst_knob(KNOB_MODE_WRITEONCE, "pintool", "inst", "0", "run in probe mode and generate the binary code of the top 10 routines");
+KNOB<BOOL> prof_knob(KNOB_MODE_WRITEONCE, "pintool", "prof", "0", "run profile and print out routines information into the file count.csv");
+KNOB<BOOL> opt_knob(KNOB_MODE_WRITEONCE, "pintool", "opt", "0", "run in probe mode");
 
 int main_collect_profile();
 
@@ -72,13 +72,13 @@ void construct_profile_map(std::ifstream& profiling_file)
             pos = next_pos;
         }
         // cout << "rtn_name:" << rtn_name << ",rtn_count:" << rtn_count << endl;
-        if (rtn_map.find(rtn_name) == rtn_map.end()) {
-            rtn_stat_t* rtn_stat = new rtn_stat_t();
-            rtn_stat->rtn_name = rtn_name;
-            rtn_stat->count = rtn_count;
-            rtn_stat->in_executable = false;
-            rtn_map[rtn_name] = rtn_stat;
-            rtn_vec.push_back(rtn_stat);
+        if (rtnMap.find(rtn_name) == rtnMap.end()) {
+            rtnStat_t* rtnStat = new rtnStat_t();
+            rtnStat->rtn_name = rtn_name;
+            rtnStat->count = rtn_count;
+            rtnStat->in_executable = false;
+            rtnMap[rtn_name] = rtnStat;
+            rtn_vec.push_back(rtnStat);
         }
     }
     profiling_file.close();
@@ -96,7 +96,7 @@ void get_tc_rtns()
         }
     }
     */
-    sort(rtn_vec.begin(), rtn_vec.end(), rtn_stat_comp);
+    sort(rtn_vec.begin(), rtn_vec.end(), rtnStat_comp);
     if (rtn_vec.size() < TC_RTN_COUNT) {
         return;
     }
@@ -115,8 +115,8 @@ VOID mark_executable_rtns(IMG img, VOID* v)
     for (SEC sec = IMG_SecHead(img); SEC_Valid(sec); sec = SEC_Next(sec)) {
         for (RTN rtn = SEC_RtnHead(sec); RTN_Valid(rtn); rtn = RTN_Next(rtn)) {
             const string& rtn_name = RTN_Name(rtn);
-            if (rtn_map.find(rtn_name) != rtn_map.end()) {
-                rtn_map[rtn_name]->in_executable = true;
+            if (rtnMap.find(rtn_name) != rtnMap.end()) {
+                rtnMap[rtn_name]->in_executable = true;
             }
         }
     }
@@ -140,13 +140,13 @@ int main(int argc, char* argv[])
     }
 
     if (prof_knob) {
-        collect_profile();
-    } else if (inst_knob) {
+        main_collect_profile();
+    } else if (opt_knob) {
         std::ifstream profiling_file(PROFILING_FILE_NAME);
 
         if (!profiling_file.is_open()) {
             cerr << PROFILING_FILE_NAME << " not found." << endl;
-            cerr << "please run -prof before using -inst." << endl;
+            cerr << "please run -prof before using -opt." << endl;
             return -1;
         }
         construct_profile_map(profiling_file);
