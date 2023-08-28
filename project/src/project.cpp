@@ -1,4 +1,6 @@
 #include "pin.H"
+#include "profile.cpp"
+#include "rtn-translation.cpp"
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -43,11 +45,11 @@ vector<rtnStat_t*> rtn_vec;
 set<string> tc_rtn_names;
 
 KNOB<BOOL> prof_knob(KNOB_MODE_WRITEONCE, "pintool", "prof", "0", "run profile and print out routines information into the file count.csv");
-KNOB<BOOL> opt_knob(KNOB_MODE_WRITEONCE, "pintool", "opt", "0", "run in probe mode");
+KNOB<INT> opt_knob(KNOB_MODE_WRITEONCE, "pintool", "opt", "0", "run in probe mode");
 
-int collect_profile();
+//int collect_profile();
 
-int rtn_translation_inst();
+//int rtn_translation_inst();
 
 void construct_profile_map(std::ifstream& profiling_file)
 {
@@ -140,7 +142,7 @@ int main(int argc, char* argv[])
     }
 
     if (prof_knob) {
-        main_collect_profile();
+        main_collect_profile(argc, argv);
     } else if (opt_knob) {
         std::ifstream profiling_file(PROFILING_FILE_NAME);
 
