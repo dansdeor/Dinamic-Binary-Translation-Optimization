@@ -1,103 +1,68 @@
+#include "project.h"
 #include "pin.H"
-#include "profile.cpp"
-#include "rtn-translation.cpp"
-#include <assert.h>
-#include <errno.h>
+#include "prof_rtn_stat.h"
 #include <fcntl.h>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
-#include <malloc.h>
 #include <set>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
+#include <unordered_map>
 
-using namespace std;
+using std::cerr;
+using std::cout;
+using std::endl;
+using std::getline;
+using std::multiset;
+using std::string;
+using std::unordered_map;
 
-#define TC_RTN_COUNT 10
-#define CSV_LINE_ELEMENTS_NUM 9
-#define RTN_NAME 5
-#define RTN_INS_COUNT 7
-#define PROFILING_FILE_NAME "loop-count.csv"
+unordered_map<string, prof_rtn_stat*> rtn_map;
+multiset<prof_rtn_stat*, rtn_stat_comp> rtn_heat_set;
 
-typedef struct rtnStat {
-    string rtn_name;
-    uint64_t count;
-    bool in_executable;
-} rtnStat_t;
-
-bool rtnStat_comp(rtnStat_t* a, rtnStat_t* b)
-{
-    if (a->in_executable != b->in_executable) {
-        return a->in_executable;
-    }
-    return a->count >= b->count;
-}
-
-map<string, rtnStat_t*> rtnMap;
-vector<rtnStat_t*> rtn_vec;
-
-set<string> tc_rtn_names;
-
-KNOB<BOOL> prof_knob(KNOB_MODE_WRITEONCE, "pintool", "prof", "0", "run profile and print out routines information into the file count.csv");
-KNOB<INT> opt_knob(KNOB_MODE_WRITEONCE, "pintool", "opt", "0", "run in probe mode");
-
-//int collect_profile();
-
-//int rtn_translation_inst();
+KNOB<BOOL> prof_knob(KNOB_MODE_WRITEONCE, "pintool", "prof", "0", "run profiling and save candidates for reordering and inlining optimizations to the file profile_stat.csv");
+KNOB<BOOL> opt_knob(KNOB_MODE_WRITEONCE, "pintool", "opt", "0", "run in probe mode and generate the binary code for the optimized binary");
+void check_opt_mode(UINT16* opt_mode);
 
 void construct_profile_map(std::ifstream& profiling_file)
 {
-    string line;
-    while (getline(profiling_file, line)) {
-        size_t pos = 0;
-        string rtn_name, rtn_count_str;
-        uint64_t rtn_count = 0;
-        for (size_t i = 0; i < CSV_LINE_ELEMENTS_NUM; i++) {
-            size_t next_pos = line.find(",", pos) + 2;
-            switch (i) {
-            case RTN_NAME:
-                rtn_name = line.substr(pos, next_pos - pos - 2);
-                break;
-            case RTN_INS_COUNT:
-                rtn_count_str = line.substr(pos, next_pos - pos - 2);
-                rtn_count = strtoull(rtn_count_str.c_str(), nullptr, 10);
-                break;
-            default:
-                break;
-            }
-            pos = next_pos;
-        }
-        // cout << "rtn_name:" << rtn_name << ",rtn_count:" << rtn_count << endl;
-        if (rtnMap.find(rtn_name) == rtnMap.end()) {
-            rtnStat_t* rtnStat = new rtnStat_t();
-            rtnStat->rtn_name = rtn_name;
-            rtnStat->count = rtn_count;
-            rtnStat->in_executable = false;
-            rtnMap[rtn_name] = rtnStat;
-            rtn_vec.push_back(rtnStat);
-        }
+    if (!profiling_file.is_open()) {
+        return;
     }
-    profiling_file.close();
+    string line, rtn_addr, heat, opt_mode, rtn_branch_offset, rtn_inline_offset;
+    while (getline(profiling_file, line)) {
+        std::stringstream s_stream(line);
+        prof_rtn_stat* prof_stat = new prof_rtn_stat();
+        if (prof_stat == nullptr) {
+            break;
+        }
+        getline(s_stream, prof_stat->rtn_name, ',');
+        getline(s_stream, rtn_addr, ',');
+        prof_stat->rtn_addr = std::stoull(rtn_addr, nullptr, 16);
+        getline(s_stream, heat, ',');
+        prof_stat->heat = std::stoull(heat);
+        getline(s_stream, opt_mode, ',');
+        prof_stat->opt_mode = std::stoul(opt_mode);
+        check_opt_mode(&(prof_stat->opt_mode));
+        getline(s_stream, rtn_branch_offset, ',');
+        prof_stat->rtn_branch_offset = std::stoul(rtn_branch_offset);
+        getline(s_stream, rtn_inline_offset, ',');
+        prof_stat->rtn_inline_offset = std::stoul(rtn_inline_offset);
+        getline(s_stream, prof_stat->inline_callee_name);
+        rtn_map.insert({ prof_stat->rtn_name, prof_stat });
+        rtn_heat_set.insert(prof_stat);
+    }
+    for (auto it = rtn_heat_set.begin(); it != rtn_heat_set.end(); ++it) {
+        cout << "name: " << (*it)->rtn_name << " addr: 0x" << std::hex << (*it)->rtn_addr << std::dec
+             << " heat: " << (*it)->heat << " opt_mode: " << (*it)->opt_mode << " branch_offset: "
+             << (*it)->rtn_branch_offset << " inline_offset: " << (*it)->rtn_inline_offset
+             << " inline_callee_name: " << (*it)->inline_callee_name << endl;
+    }
 }
 
+/*
 void get_tc_rtns()
 {
-    /*
-    for (auto it = rtn_vec.begin(); it != rtn_vec.end();) {
-        if (!(*it)->in_executable) {
-            // delete (*it);
-            it = rtn_vec.erase(it);
-        } else {
-            ++it;
-        }
-    }
-    */
     sort(rtn_vec.begin(), rtn_vec.end(), rtnStat_comp);
     if (rtn_vec.size() < TC_RTN_COUNT) {
         return;
@@ -109,7 +74,6 @@ void get_tc_rtns()
         i++;
     }
 }
-
 VOID mark_executable_rtns(IMG img, VOID* v)
 {
     if (!IMG_IsMainExecutable(img))
@@ -124,14 +88,17 @@ VOID mark_executable_rtns(IMG img, VOID* v)
     }
     get_tc_rtns();
 }
-
+*/
 INT32 Usage()
 {
-    cerr << "This tool implements homework 3" << endl;
-    cerr << "-prof: run exercise 2 and print out loop trip count information into the file loop-count.csv" << endl;
-    cerr << "-inst: run in probe mode and generate the binary code of the top 10 routines" << endl;
+    cerr << "This tool implements final project" << endl;
+    cerr << "-prof: run profiling and save candidates for reordering and inlining optimizations to the file profile_stat.csv" << endl;
+    cerr << "-opt: run in probe mode and generate the binary code for the optimized binary" << endl;
     return -1;
 }
+
+int rtn_translation_main(int argc, char* argv[]);
+int collect_profile_main(int argc, char* argv[]);
 
 int main(int argc, char* argv[])
 {
@@ -142,18 +109,19 @@ int main(int argc, char* argv[])
     }
 
     if (prof_knob) {
-        main_collect_profile(argc, argv);
+        collect_profile_main(argc, argv);
     } else if (opt_knob) {
-        std::ifstream profiling_file(PROFILING_FILE_NAME);
+        std::ifstream profiling_file(OUTPUT_FILE_NAME);
 
         if (!profiling_file.is_open()) {
-            cerr << PROFILING_FILE_NAME << " not found." << endl;
+            cerr << OUTPUT_FILE_NAME << " not found." << endl;
             cerr << "please run -prof before using -opt." << endl;
             return -1;
         }
         construct_profile_map(profiling_file);
-        IMG_AddInstrumentFunction(mark_executable_rtns, 0);
-        rtn_translation_inst();
+        profiling_file.close();
+        // IMG_AddInstrumentFunction(mark_executable_rtns, 0);
+        rtn_translation_main(argc, argv);
     } else {
         return Usage();
     }

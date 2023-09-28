@@ -45,6 +45,7 @@ END_LEGAL */
 extern "C" {
 #include "xed-interface.h"
 }
+#include "project.h"
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -52,7 +53,6 @@ extern "C" {
 #include <iomanip>
 #include <iostream>
 #include <malloc.h>
-#include <set>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -131,8 +131,6 @@ typedef struct {
 
 translated_rtn_t* translated_rtn;
 int translated_rtn_num = 0;
-
-extern set<string> tc_rtn_names;
 
 /* ============================================================= */
 /* Service dump routines                                         */
@@ -702,82 +700,42 @@ int fix_instructions_displacements()
     return 0;
 }
 
+void optimize_translated_routine(RTN rtn, prof_rtn_stat* prof_stat);
+
 /*****************************************/
 /* find_candidate_rtns_for_translation() */
 /*****************************************/
 int find_candidate_rtns_for_translation(IMG img)
 {
-    int rc;
+    // int rc;
 
     // go over routines and check if they are candidates for translation and mark them for translation:
 
-    for (SEC sec = IMG_SecHead(img); SEC_Valid(sec); sec = SEC_Next(sec)) {
-        if (!SEC_IsExecutable(sec) || SEC_IsWriteable(sec) || !SEC_Address(sec))
+    // for (SEC sec = IMG_SecHead(img); SEC_Valid(sec); sec = SEC_Next(sec)) {
+    //     if (!SEC_IsExecutable(sec) || SEC_IsWriteable(sec) || !SEC_Address(sec))
+    //         continue;
+    //     for (RTN rtn = SEC_RtnHead(sec); RTN_Valid(rtn); rtn = RTN_Next(rtn)) {
+    for (auto it = rtn_heat_set.begin(); it != rtn_heat_set.end(); ++it) {
+        RTN rtn = RTN_FindByName(img, (*it)->rtn_name.c_str());
+
+        if (rtn == RTN_Invalid()) {
+            cerr << "Warning: invalid routine " << (*it)->rtn_name << endl;
             continue;
+        }
+        if (rtn_map.find(RTN_Name(rtn)) == rtn_map.end()) {
+            continue;
+        }
 
-        for (RTN rtn = SEC_RtnHead(sec); RTN_Valid(rtn); rtn = RTN_Next(rtn)) {
+        translated_rtn[translated_rtn_num].rtn_addr = RTN_Address(rtn);
+        translated_rtn[translated_rtn_num].rtn_size = RTN_Size(rtn);
+        translated_rtn[translated_rtn_num].instr_map_entry = num_of_instr_map_entries;
+        translated_rtn[translated_rtn_num].isSafeForReplacedProbe = true;
 
-            if (rtn == RTN_Invalid()) {
-                cerr << "Warning: invalid routine " << RTN_Name(rtn) << endl;
-                continue;
-            }
-            if (tc_rtn_names.find(RTN_Name(rtn)) == tc_rtn_names.end()) {
-                continue;
-            }
+        optimize_translated_routine(rtn, rtn_map[RTN_Name(rtn)]);
 
-            translated_rtn[translated_rtn_num].rtn_addr = RTN_Address(rtn);
-            translated_rtn[translated_rtn_num].rtn_size = RTN_Size(rtn);
-            translated_rtn[translated_rtn_num].instr_map_entry = num_of_instr_map_entries;
-            translated_rtn[translated_rtn_num].isSafeForReplacedProbe = true;
+    } // end for RTN..
+    //} // end for SEC...
 
-            // Open the RTN.
-            RTN_Open(rtn);
-
-            for (INS ins = RTN_InsHead(rtn); INS_Valid(ins); ins = INS_Next(ins)) {
-
-                // debug print of orig instruction:
-                if (KnobVerbose) {
-                    cerr << "old instr: ";
-                    cerr << "0x" << hex << INS_Address(ins) << ": " << INS_Disassemble(ins) << endl;
-                    // xed_print_hex_line(reinterpret_cast<UINT8*>(INS_Address (ins)), INS_Size(ins));
-                }
-
-                ADDRINT addr = INS_Address(ins);
-
-                xed_decoded_inst_t xedd;
-                xed_error_enum_t xed_code;
-
-                xed_decoded_inst_zero_set_mode(&xedd, &dstate);
-
-                xed_code = xed_decode(&xedd, reinterpret_cast<UINT8*>(addr), max_inst_len);
-                if (xed_code != XED_ERROR_NONE) {
-                    cerr << "ERROR: xed decode failed for instr at: "
-                         << "0x" << hex << addr << endl;
-                    translated_rtn[translated_rtn_num].instr_map_entry = -1;
-                    break;
-                }
-
-                // Add instr into instr map:
-                rc = add_new_instr_entry(&xedd, INS_Address(ins), INS_Size(ins));
-                if (rc < 0) {
-                    cerr << "ERROR: failed during instructon translation." << endl;
-                    translated_rtn[translated_rtn_num].instr_map_entry = -1;
-                    break;
-                }
-            } // end for INS...
-
-            // debug print of routine name:
-            if (KnobVerbose) {
-                cerr << "rtn name: " << RTN_Name(rtn) << " : " << dec << translated_rtn_num << endl;
-            }
-
-            // Close the RTN.
-            RTN_Close(rtn);
-
-            translated_rtn_num++;
-
-        } // end for RTN..
-    } // end for SEC...
     return 0;
 }
 
@@ -868,13 +826,11 @@ int allocate_and_init_memory(IMG img)
         // need to avouid using RTN_Open as it is expensive...
         for (RTN rtn = SEC_RtnHead(sec); RTN_Valid(rtn); rtn = RTN_Next(rtn)) {
 
-            if (rtn == RTN_Invalid()) {
+            if (rtn == RTN_Invalid())
+                continue;
+            if (rtn_map.find(RTN_Name(rtn)) == rtn_map.end()) {
                 continue;
             }
-            if (tc_rtn_names.find(RTN_Name(rtn)) == tc_rtn_names.end()) {
-                continue;
-            }
-
             max_ins_count += RTN_NumIns(rtn);
             max_rtn_count++;
         }
@@ -985,12 +941,17 @@ VOID ImageLoad(IMG img, VOID* v)
     }
 }
 
-/* ===================================================================== */
-/* Main                                                                  */
-/* ===================================================================== */
-
-int rtn_translation_inst()
+int rtn_translation_main(int argc, char* argv[])
 {
+
+    // Initialize pin & symbol manager
+    // out = new std::ofstream("xed-print.out");
+
+    // if( PIN_Init(argc,argv) )
+    //     return Usage();
+
+    // PIN_InitSymbols();
+
     // Register ImageLoad
     IMG_AddInstrumentFunction(ImageLoad, 0);
 

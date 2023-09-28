@@ -90,7 +90,7 @@ ifeq ($(TARGET_OS),linux)
     TOOL_ROOTS +=
     SA_TOOL_ROOTS +=
     APP_ROOTS +=
-    OBJECT_ROOTS +=  project profile rtn-translation
+    OBJECT_ROOTS +=  project profile optimize rtn-translation 
     DLL_ROOTS +=
     LIB_ROOTS +=
     ifeq ($(TARGET),ia32)
@@ -227,7 +227,7 @@ SANITY_SUBSET := $(TEST_TOOL_ROOTS) $(TEST_ROOTS)
 
 ###### Special tools' build rules ######
 
-$(OBJDIR)project$(PINTOOL_SUFFIX): $(OBJDIR)project$(OBJ_SUFFIX) $(OBJDIR)profile$(OBJ_SUFFIX) $(OBJDIR)rtn-translation$(OBJ_SUFFIX)
+$(OBJDIR)project$(PINTOOL_SUFFIX): $(OBJDIR)project$(OBJ_SUFFIX) $(OBJDIR)profile$(OBJ_SUFFIX) $(OBJDIR)optimize$(OBJ_SUFFIX) $(OBJDIR)rtn-translation$(OBJ_SUFFIX)
 	$(LINKER) $(TOOL_LDFLAGS_NOOPT) $(LINK_EXE)$@ $(^:%.h=) $(TOOL_LPATHS) $(TOOL_LIBS)
 
 # placeholder for special tools' build rules

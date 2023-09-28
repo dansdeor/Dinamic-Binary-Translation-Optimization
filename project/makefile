@@ -1,12 +1,15 @@
-pin_dir:= $(wildcard pin*)
+pin_dir := $(wildcard pin-*)
 
-all: pin_tool
+all: run
 
 run: pin_tool
-	./$(pin_dir)/pin -t ex3.so -prof -- ./bzip2 -k -f input.txt
-	./$(pin_dir)/pin -t ex3.so -inst -- ./bzip2 -k -f input.txt
+#./$(pin_dir)/pin -t project.so -prof -- ./test.out
+#./$(pin_dir)/pin -t project.so -opt -- ./test.out
+	./$(pin_dir)/pin -t project.so -prof -- ./bzip2 -k -f input.txt
+	./$(pin_dir)/pin -t project.so -opt -- ./bzip2 -k -f input.txt
 
 pin_tool:
+#gcc test.c -o test.out
 	cd src &&  make PIN_ROOT=../$(pin_dir) obj-intel64/project.so && cd ..
 	cp src/obj-intel64/project.so ./project.so
 
